@@ -51,11 +51,14 @@ public class Client implements Runnable, Closeable {
 
 	private static final AtomicBoolean ERROR = new AtomicBoolean(false);
 	private final VantagePro2Client client;
+	private final AtomicInteger errorCount = new AtomicInteger();
+	private final long period;
 	private boolean printCurrent = false;
 	private boolean printHighsLows = false;
 	private static final Logger LOGGER = Logger.getLogger(Client.class);
 
-	public Client(final String hostname, final int port) {
+	public Client(final String hostname, final int port, final long period) {
+		this.period = period;
 		client = new NetworkClient(hostname, port);
 	}
 
@@ -153,7 +156,7 @@ public class Client implements Runnable, Closeable {
 		// Setup a scheduled task
 		final ScheduledExecutorService service = configureExecutor();
 
-		try (final Client client = new Client(hostname, port)) {
+		try (final Client client = new Client(hostname, port, period)) {
 			client.setPrintCurrent(printCurrent);
 			client.setPrintHighsLows(printHighsLows);
 			client.client.connect();
@@ -443,9 +446,17 @@ public class Client implements Runnable, Closeable {
 			} catch (SocketException e) {
 				LOGGER.error("Connection to wunderground failed");
 			}
-		} catch (IOException e) {
+		} catch (Error e) {
 			ERROR.set(true);
 			e.printStackTrace();
+		} catch (Throwable t) {
+			if (errorCount.incrementAndGet() > 6) {
+				ERROR.set(true);
+			} else {
+				// TODO reschedule task
+				// service.scheduleAtFixedRate(this, 0, period, TimeUnit.SECONDS);
+			}
+			t.printStackTrace();
 		}
 	}
 
